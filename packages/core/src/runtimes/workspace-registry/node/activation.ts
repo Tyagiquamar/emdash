@@ -261,6 +261,15 @@ export class WorkspaceActivationManager {
     return { teardownFailure: { message: outcome.message } };
   }
 
+  /**
+   * Drops consumed-removal state for an unregistered workspace: a fresh workspace
+   * reusing the id owns its teardown again instead of inheriting the predecessor's
+   * settled marker.
+   */
+  forgetRemovalTeardown(id: string): void {
+    this.removalTeardowns.delete(id);
+  }
+
   /** Abandons all activations without teardown; used on runtime disposal only. */
   dispose(): void {
     for (const state of this.active.values()) {

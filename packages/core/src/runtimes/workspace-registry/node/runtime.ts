@@ -1461,6 +1461,9 @@ export class WorkspaceRegistryRuntime {
     const projectRoot = existing ? this.projectRootFor(existing) : null;
     const deleted = this.store.delete(input.workspaceId);
     if (deleted) {
+      // The instance is gone: drop its consumed-removal state so a recreated
+      // workspace reusing the id settles its own teardown, never the stale one.
+      this.activationManager.forgetRemovalTeardown(input.workspaceId);
       this.overlays.delete(input.workspaceId);
       this.scanner.evict(input.workspaceId);
       this.configs.delete(input.workspaceId);

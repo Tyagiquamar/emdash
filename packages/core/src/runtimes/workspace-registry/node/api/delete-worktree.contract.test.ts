@@ -398,6 +398,41 @@ describe('workspace registry deleteWorktree', () => {
     expect((await listRecords())['ws-repo']).toBeUndefined();
   });
 
+  it('a workspace reusing a deleted id owns its teardown again', async () => {
+    const repoPath = await makeRepo(root, 'repo');
+    await wire.client.createWorkspace({ workspaceId: 'ws-reused', path: repoPath });
+    await fs.writeFile(
+      path.join(repoPath, '.emdash.json'),
+      JSON.stringify({ scripts: { teardown: 'exit 3' } })
+    );
+    await wire.client.refresh({ workspaceId: 'ws-reused' });
+
+    // First instance: its orphan teardown settles once, then the retry unregisters.
+    expect(await wire.client.deleteWorkspace({ workspaceId: 'ws-reused' })).toMatchObject({
+      success: false,
+    });
+    expect(await wire.client.deleteWorkspace({ workspaceId: 'ws-reused' })).toEqual({
+      success: true,
+      data: undefined,
+    });
+
+    // A fresh, never-activated workspace reusing the id must not inherit the stale
+    // settled marker: its own teardown runs before deletion.
+    const secondPath = path.join(root, 'second');
+    await fs.mkdir(secondPath);
+    await wire.client.createWorkspace({ workspaceId: 'ws-reused', path: secondPath });
+    await fs.writeFile(
+      path.join(secondPath, '.emdash.json'),
+      JSON.stringify({ scripts: { teardown: 'exit 3' } })
+    );
+    await wire.client.refresh({ workspaceId: 'ws-reused' });
+
+    expect(await wire.client.deleteWorkspace({ workspaceId: 'ws-reused' })).toMatchObject({
+      success: false,
+      error: { type: 'remove-failed', stage: 'teardown', class: 'transient' },
+    });
+  });
+
   it('deleteWorkspace deactivates before unregistering and still never touches disk', async () => {
     const repoPath = await makeRepo(root, 'repo');
     await wire.client.createWorkspace({ workspaceId: 'ws-repo', path: repoPath });
